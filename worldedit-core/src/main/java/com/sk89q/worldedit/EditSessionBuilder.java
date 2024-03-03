@@ -531,14 +531,14 @@ public final class EditSessionBuilder {
                 }
             }
             if (allowedRegions == null && Settings.settings().REGION_RESTRICTIONS) {
-                if (actor != null && !actor.hasPermission("fawe.bypass.regions")) {
+                if (!(Settings.settings()).REGION_RESTRICTIONS) {
                     if (actor instanceof Player player) {
                         allowedRegions = player.getAllowedRegions();
                     }
                 }
             }
             if (disallowedRegions == null && Settings.settings().REGION_RESTRICTIONS && Settings.settings().REGION_RESTRICTIONS_OPTIONS.ALLOW_BLACKLISTS) {
-                if (actor != null && !actor.hasPermission("fawe.bypass.regions")) {
+                if (!(Settings.settings()).REGION_RESTRICTIONS) {
                     if (actor instanceof Player player) {
                         disallowedRegions = player.getDisallowedRegions();
                     }

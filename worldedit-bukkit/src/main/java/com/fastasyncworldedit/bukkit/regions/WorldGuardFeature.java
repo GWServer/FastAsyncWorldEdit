@@ -27,6 +27,7 @@ import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.Plugin;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -129,7 +130,7 @@ public class WorldGuardFeature extends BukkitMaskManager implements Listener {
         }
     }
 
-    public boolean isAllowed(LocalPlayer localplayer, ProtectedRegion region) {
+    public boolean isAllowed(LocalPlayer localplayer, @NotNull ProtectedRegion region) {
         //Check if player is the owner of the region, the region's ID contains the player's name (why?), or if the region's owners contains "*".
         if (region.isOwner(localplayer) || region.isOwner(localplayer.getName())) {
             return true;

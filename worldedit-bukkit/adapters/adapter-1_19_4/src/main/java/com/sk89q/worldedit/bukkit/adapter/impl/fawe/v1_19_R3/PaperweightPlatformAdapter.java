@@ -26,6 +26,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.IdMap;
 import net.minecraft.core.Registry;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerLevel;
@@ -97,7 +98,7 @@ public final class PaperweightPlatformAdapter extends NMSAdapter {
 
     private static final Field fieldTickingFluidCount;
     private static final Field fieldTickingBlockCount;
-    private static final Field fieldNonEmptyBlockCount;
+    private static final Field fieldBiomes;
 
     private static final MethodHandle methodGetVisibleChunk;
 
@@ -138,8 +139,15 @@ public final class PaperweightPlatformAdapter extends NMSAdapter {
             fieldTickingFluidCount.setAccessible(true);
             fieldTickingBlockCount = LevelChunkSection.class.getDeclaredField(Refraction.pickName("tickingBlockCount", "g"));
             fieldTickingBlockCount.setAccessible(true);
-            fieldNonEmptyBlockCount = LevelChunkSection.class.getDeclaredField(Refraction.pickName("nonEmptyBlockCount", "f"));
-            fieldNonEmptyBlockCount.setAccessible(true);
+            Field tmpFieldBiomes;
+            try {
+                // It seems to actually be biomes, but is apparently obfuscated to "j"
+                tmpFieldBiomes = LevelChunkSection.class.getDeclaredField("biomes");
+            } catch (NoSuchFieldException ignored) {
+                tmpFieldBiomes = LevelChunkSection.class.getDeclaredField("j");
+            }
+            fieldBiomes = tmpFieldBiomes;
+            fieldBiomes.setAccessible(true);
 
             Method getVisibleChunkIfPresent = ChunkMap.class.getDeclaredMethod(Refraction.pickName(
                     "getVisibleChunkIfPresent",
@@ -318,7 +326,7 @@ public final class PaperweightPlatformAdapter extends NMSAdapter {
     }
 
     @SuppressWarnings("deprecation")
-    public static void sendChunk(ServerLevel nmsWorld, int chunkX, int chunkZ, boolean lighting) {
+    public static void sendChunk(Object chunk, ServerLevel nmsWorld, int chunkX, int chunkZ) {
         ChunkHolder chunkHolder = getPlayerChunk(nmsWorld, chunkX, chunkZ);
         if (chunkHolder == null) {
             return;
@@ -339,7 +347,7 @@ public final class PaperweightPlatformAdapter extends NMSAdapter {
         if (levelChunk == null) {
             return;
         }
-        TaskManager.taskManager().task(() -> {
+        MinecraftServer.getServer().execute(() -> {
             ClientboundLevelChunkWithLightPacket packet;
             if (PaperLib.isPaper()) {
                 packet = new ClientboundLevelChunkWithLightPacket(
@@ -495,6 +503,14 @@ public final class PaperweightPlatformAdapter extends NMSAdapter {
                 null
         );
         return new LevelChunkSection(layer, dataPaletteBlocks, biomes);
+    }
+
+    public static void setBiomesToChunkSection(LevelChunkSection section, PalettedContainer<Holder<Biome>> biomes) {
+        try {
+            fieldBiomes.set(section, biomes);
+        } catch (IllegalAccessException e) {
+            LOGGER.error("Could not set biomes to chunk section", e);
+        }
     }
 
     /**

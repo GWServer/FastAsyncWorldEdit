@@ -1,6 +1,7 @@
 package com.fastasyncworldedit.core.limit;
 
 import com.fastasyncworldedit.core.FaweCache;
+import com.fastasyncworldedit.core.configuration.Settings;
 
 import java.util.Collections;
 import java.util.Set;
@@ -15,12 +16,19 @@ public class FaweLimit {
     public int MAX_BLOCKSTATES = 0;
     public int MAX_ENTITIES = 0;
     public int MAX_HISTORY = 0;
+    public int SCHEM_FILE_SIZE_LIMIT = 0;
+    public int SCHEM_FILE_NUM_LIMIT = 0;
     public int MAX_EXPRESSION_MS = 0;
+    public int MAX_RADIUS = 0;
+    public int MAX_SUPER_PICKAXE_SIZE = 0;
+    public int MAX_BRUSH_RADIUS = 0;
+    public int MAX_BUTCHER_RADIUS = 0;
     public int INVENTORY_MODE = Integer.MAX_VALUE;
     public int SPEED_REDUCTION = Integer.MAX_VALUE;
     public boolean FAST_PLACEMENT = false;
     public boolean CONFIRM_LARGE = true;
     public boolean RESTRICT_HISTORY_TO_REGIONS = true;
+    public boolean ALLOW_LEGACY = true;
     public Set<String> STRIP_NBT = null;
     public boolean UNIVERSAL_DISALLOWED_BLOCKS = true;
     public Set<String> DISALLOWED_BLOCKS = null;
@@ -111,14 +119,22 @@ public class FaweLimit {
         MAX.MAX_BLOCKSTATES = Integer.MAX_VALUE;
         MAX.MAX_ENTITIES = Integer.MAX_VALUE;
         MAX.MAX_HISTORY = Integer.MAX_VALUE;
+        MAX.SCHEM_FILE_NUM_LIMIT = Integer.MAX_VALUE;
+        MAX.SCHEM_FILE_SIZE_LIMIT = Integer.MAX_VALUE;
         MAX.MAX_EXPRESSION_MS = 50;
         MAX.FAST_PLACEMENT = true;
-        MAX.CONFIRM_LARGE = true;
+        MAX.CONFIRM_LARGE =
+                Settings.settings().LIMITS.get("default").CONFIRM_LARGE || Settings.settings().GENERAL.LIMIT_UNLIMITED_CONFIRMS;
         MAX.RESTRICT_HISTORY_TO_REGIONS = false;
         MAX.STRIP_NBT = Collections.emptySet();
         MAX.UNIVERSAL_DISALLOWED_BLOCKS = false;
+        MAX.ALLOW_LEGACY = true;
         MAX.DISALLOWED_BLOCKS = Collections.emptySet();
         MAX.REMAP_PROPERTIES = Collections.emptySet();
+        MAX.MAX_RADIUS = Integer.MAX_VALUE;
+        MAX.MAX_SUPER_PICKAXE_SIZE = Integer.MAX_VALUE;
+        MAX.MAX_BRUSH_RADIUS = Integer.MAX_VALUE;
+        MAX.MAX_BUTCHER_RADIUS = Integer.MAX_VALUE;
     }
 
     public boolean MAX_CHANGES() {
@@ -237,14 +253,21 @@ public class FaweLimit {
                 && MAX_BLOCKSTATES == Integer.MAX_VALUE
                 && MAX_ENTITIES == Integer.MAX_VALUE
                 && MAX_HISTORY == Integer.MAX_VALUE
+                && SCHEM_FILE_SIZE_LIMIT == Integer.MAX_VALUE
+                && SCHEM_FILE_NUM_LIMIT == Integer.MAX_VALUE
                 && INVENTORY_MODE == 0
                 && SPEED_REDUCTION == 0
                 && FAST_PLACEMENT
                 && !RESTRICT_HISTORY_TO_REGIONS
                 && (STRIP_NBT == null || STRIP_NBT.isEmpty())
                 // && !UNIVERSAL_DISALLOWED_BLOCKS --> do not include this, it effectively has no relevance
+                && ALLOW_LEGACY
                 && (DISALLOWED_BLOCKS == null || DISALLOWED_BLOCKS.isEmpty())
-                && (REMAP_PROPERTIES == null || REMAP_PROPERTIES.isEmpty());
+                && (REMAP_PROPERTIES == null || REMAP_PROPERTIES.isEmpty())
+                && MAX_RADIUS == Integer.MAX_VALUE
+                && MAX_SUPER_PICKAXE_SIZE == Integer.MAX_VALUE
+                && MAX_BRUSH_RADIUS == Integer.MAX_VALUE
+                && MAX_BUTCHER_RADIUS == Integer.MAX_VALUE;
     }
 
     public void set(FaweLimit limit) {
@@ -256,6 +279,8 @@ public class FaweLimit {
         MAX_FAILS = limit.MAX_FAILS;
         MAX_ITERATIONS = limit.MAX_ITERATIONS;
         MAX_HISTORY = limit.MAX_HISTORY;
+        SCHEM_FILE_NUM_LIMIT = limit.SCHEM_FILE_NUM_LIMIT;
+        SCHEM_FILE_SIZE_LIMIT = limit.SCHEM_FILE_SIZE_LIMIT;
         INVENTORY_MODE = limit.INVENTORY_MODE;
         SPEED_REDUCTION = limit.SPEED_REDUCTION;
         FAST_PLACEMENT = limit.FAST_PLACEMENT;
@@ -263,8 +288,13 @@ public class FaweLimit {
         RESTRICT_HISTORY_TO_REGIONS = limit.RESTRICT_HISTORY_TO_REGIONS;
         STRIP_NBT = limit.STRIP_NBT;
         UNIVERSAL_DISALLOWED_BLOCKS = limit.UNIVERSAL_DISALLOWED_BLOCKS;
+        ALLOW_LEGACY = limit.ALLOW_LEGACY;
         DISALLOWED_BLOCKS = limit.DISALLOWED_BLOCKS;
         REMAP_PROPERTIES = limit.REMAP_PROPERTIES;
+        MAX_RADIUS = limit.MAX_RADIUS;
+        MAX_SUPER_PICKAXE_SIZE = limit.MAX_SUPER_PICKAXE_SIZE;
+        MAX_BRUSH_RADIUS = limit.MAX_BRUSH_RADIUS;
+        MAX_BUTCHER_RADIUS = limit.MAX_BUTCHER_RADIUS;
     }
 
     public FaweLimit copy() {
@@ -279,13 +309,20 @@ public class FaweLimit {
         limit.MAX_FAILS = MAX_FAILS;
         limit.MAX_ITERATIONS = MAX_ITERATIONS;
         limit.MAX_HISTORY = MAX_HISTORY;
+        limit.SCHEM_FILE_SIZE_LIMIT = SCHEM_FILE_SIZE_LIMIT;
+        limit.SCHEM_FILE_NUM_LIMIT = SCHEM_FILE_NUM_LIMIT;
         limit.FAST_PLACEMENT = FAST_PLACEMENT;
         limit.CONFIRM_LARGE = CONFIRM_LARGE;
         limit.RESTRICT_HISTORY_TO_REGIONS = RESTRICT_HISTORY_TO_REGIONS;
         limit.STRIP_NBT = STRIP_NBT;
         limit.UNIVERSAL_DISALLOWED_BLOCKS = UNIVERSAL_DISALLOWED_BLOCKS;
+        limit.ALLOW_LEGACY = ALLOW_LEGACY;
         limit.DISALLOWED_BLOCKS = DISALLOWED_BLOCKS;
         limit.REMAP_PROPERTIES = REMAP_PROPERTIES;
+        limit.MAX_RADIUS = MAX_RADIUS;
+        limit.MAX_SUPER_PICKAXE_SIZE = MAX_SUPER_PICKAXE_SIZE;
+        limit.MAX_BRUSH_RADIUS = MAX_BRUSH_RADIUS;
+        limit.MAX_BUTCHER_RADIUS = MAX_BUTCHER_RADIUS;
         return limit;
     }
 

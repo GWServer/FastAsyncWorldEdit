@@ -50,6 +50,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -192,17 +193,22 @@ public enum FaweCache implements Trimable {
             Type.OUTSIDE_REGION
     );
     public static final FaweException MAX_CHECKS = new FaweException(
-            Caption.of("fawe.cancel.reason.max" + ".checks"),
+            Caption.of("fawe.cancel.reason.max.checks"),
+            Type.MAX_CHECKS,
+            true
+    );
+    public static final FaweException MAX_FAILS = new FaweException(
+            Caption.of("fawe.cancel.reason.max.fails"),
             Type.MAX_CHECKS,
             true
     );
     public static final FaweException MAX_CHANGES = new FaweException(
-            Caption.of("fawe.cancel.reason.max" + ".changes"),
+            Caption.of("fawe.cancel.reason.max.changes"),
             Type.MAX_CHANGES,
             false
     );
     public static final FaweException LOW_MEMORY = new FaweException(
-            Caption.of("fawe.cancel.reason.low" + ".memory"),
+            Caption.of("fawe.cancel.reason.low.memory"),
             Type.LOW_MEMORY,
             false
     );
@@ -640,7 +646,7 @@ public enum FaweCache implements Trimable {
      */
     public ThreadPoolExecutor newBlockingExecutor(String name, Logger logger) {
         int nThreads = Settings.settings().QUEUE.PARALLEL_THREADS;
-        ArrayBlockingQueue<Runnable> queue = new ArrayBlockingQueue<>(nThreads, true);
+        LinkedBlockingQueue<Runnable> queue = new LinkedBlockingQueue<>();
         return new ThreadPoolExecutor(nThreads, nThreads,
                 0L, TimeUnit.MILLISECONDS, queue,
                 new ThreadFactoryBuilder().setNameFormat(name).build(),

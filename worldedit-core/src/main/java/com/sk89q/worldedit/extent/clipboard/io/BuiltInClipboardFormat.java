@@ -39,6 +39,8 @@ import com.sk89q.worldedit.extent.clipboard.io.sponge.SpongeSchematicV3Writer;
 import it.unimi.dsi.fastutil.io.FastBufferedInputStream;
 import org.anarres.parallelgzip.ParallelGZIPOutputStream;
 import org.enginehub.linbus.stream.LinBinaryIO;
+import org.enginehub.linbus.stream.LinReadOptions;
+import org.enginehub.linbus.tree.LinCompoundTag;
 import org.enginehub.linbus.tree.LinRootEntry;
 
 import java.io.BufferedInputStream;
@@ -50,6 +52,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Collections;
 import java.util.Locale;
 import java.util.Set;
 import java.util.zip.GZIPInputStream;
@@ -113,8 +116,22 @@ public enum BuiltInClipboardFormat implements ClipboardFormat {
         }
 
         @Override
+        public boolean isFormat(File file) {
+            String name = file.getName().toLowerCase(Locale.ROOT);
+            if (name.endsWith(".schematic") || name.endsWith(".mcedit") || name.endsWith(".mce")) {
+                return false;
+            }
+            return super.isFormat(file);
+        }
+
+        @Override
         public String getPrimaryFileExtension() {
             return "schem";
+        }
+
+        @Override
+        public Set<String> getExplicitFileExtensions() {
+            return Set.of("schem3", "sponge3", "fast3");
         }
     },
     FAST_V2("fast.2", "fawe.2", "schem.2") {
@@ -151,6 +168,19 @@ public enum BuiltInClipboardFormat implements ClipboardFormat {
             return detectOldSpongeSchematic(inputStream, FastSchematicWriterV2.CURRENT_VERSION);
         }
 
+        @Override
+        public boolean isFormat(File file) {
+            String name = file.getName().toLowerCase(Locale.ROOT);
+            if (name.endsWith(".schematic") || name.endsWith(".mcedit") || name.endsWith(".mce")) {
+                return false;
+            }
+            return super.isFormat(file);
+        }
+
+        @Override
+        public Set<String> getExplicitFileExtensions() {
+            return Set.of("schem2", "sponge2", "fast2");
+        }
     },
     //FAWE end
 
@@ -178,11 +208,20 @@ public enum BuiltInClipboardFormat implements ClipboardFormat {
         }
 
         @Override
+        public boolean isFormat(File file) {
+            String name = file.getName().toLowerCase(Locale.ROOT);
+            if (!name.endsWith(".schematic") && !name.endsWith(".mcedit") && !name.endsWith(".mce")) {
+                return false;
+            }
+            return super.isFormat(file);
+        }
+
+        @Override
         public boolean isFormat(InputStream inputStream) {
             LinRootEntry rootEntry;
             try {
                 DataInputStream stream = new DataInputStream(new GZIPInputStream(inputStream));
-                rootEntry = LinBinaryIO.readUsing(stream, LinRootEntry::readFrom);
+                rootEntry = LinBinaryIO.readUsing(stream, LEGACY_OPTIONS, LinRootEntry::readFrom);
             } catch (Exception e) {
                 return false;
             }
@@ -190,6 +229,11 @@ public enum BuiltInClipboardFormat implements ClipboardFormat {
                 return false;
             }
             return rootEntry.value().value().containsKey("Materials");
+        }
+
+        @Override
+        public Set<String> getExplicitFileExtensions() {
+            return Set.of("mcedit", "schem1", "sponge1", "fast1");
         }
     },
     SPONGE_V1_SCHEMATIC("sponge.1") {
@@ -200,7 +244,9 @@ public enum BuiltInClipboardFormat implements ClipboardFormat {
 
         @Override
         public ClipboardReader getReader(InputStream inputStream) throws IOException {
-            return new SpongeSchematicV1Reader(LinBinaryIO.read(new DataInputStream(new GZIPInputStream(inputStream))));
+            return new SpongeSchematicV1Reader(LinBinaryIO.read(
+                new DataInputStream(new GZIPInputStream(inputStream)), LEGACY_OPTIONS
+            ));
         }
 
         @Override
@@ -211,6 +257,16 @@ public enum BuiltInClipboardFormat implements ClipboardFormat {
         @Override
         public boolean isFormat(InputStream inputStream) {
             return detectOldSpongeSchematic(inputStream, 1);
+        }
+
+        @Override
+        public boolean isFormat(File file) {
+            return MCEDIT_SCHEMATIC.isFormat(file);
+        }
+
+        @Override
+        public Set<String> getExplicitFileExtensions() {
+            return Collections.emptySet();
         }
     },
 
@@ -229,7 +285,9 @@ public enum BuiltInClipboardFormat implements ClipboardFormat {
 
         @Override
         public ClipboardReader getReader(InputStream inputStream) throws IOException {
-            return new SpongeSchematicV2Reader(LinBinaryIO.read(new DataInputStream(new GZIPInputStream(inputStream))));
+            return new SpongeSchematicV2Reader(LinBinaryIO.read(
+                new DataInputStream(new GZIPInputStream(inputStream)), LEGACY_OPTIONS
+            ));
         }
 
         @Override
@@ -240,6 +298,16 @@ public enum BuiltInClipboardFormat implements ClipboardFormat {
         @Override
         public boolean isFormat(InputStream inputStream) {
             return detectOldSpongeSchematic(inputStream, 2);
+        }
+
+        @Override
+        public boolean isFormat(File file) {
+            return FAST_V2.isFormat(file);
+        }
+
+        @Override
+        public Set<String> getExplicitFileExtensions() {
+            return Collections.emptySet();
         }
     },
     SPONGE_V3_SCHEMATIC("sponge.3", "slow", "safe") { // FAWE - edit aliases for fast
@@ -264,6 +332,11 @@ public enum BuiltInClipboardFormat implements ClipboardFormat {
             //FAWE start - delegate to stream-based isFormat approach of fast impl
             return FAST_V3.isFormat(file);
             //FAWE end
+        }
+
+        @Override
+        public Set<String> getExplicitFileExtensions() {
+            return Collections.emptySet();
         }
     },
     //FAWE start - recover schematics with bad entity data & register other clipboard formats
@@ -305,11 +378,15 @@ public enum BuiltInClipboardFormat implements ClipboardFormat {
             return false;
         }
 
+        @Override
+        public Set<String> getExplicitFileExtensions() {
+            return Collections.emptySet();
+        }
     },
 
     /**
      * The structure block format:
-     * http://minecraft.gamepedia.com/Structure_block_file_format
+     * <a href="https://minecraft.wiki/w/Structure_file">Structure file - Minecraft Wiki</a>
      */
     MINECRAFT_STRUCTURE("structure") {
         @Override
@@ -320,16 +397,14 @@ public enum BuiltInClipboardFormat implements ClipboardFormat {
         @Override
         public ClipboardReader getReader(InputStream inputStream) throws IOException {
             inputStream = new BufferedInputStream(inputStream);
-            NBTInputStream nbtStream = new NBTInputStream(new BufferedInputStream(new GZIPInputStream(inputStream)));
-            return new MinecraftStructure(nbtStream);
+            return new MinecraftStructure(new DataInputStream(new GZIPInputStream(inputStream)));
         }
 
         @Override
         public ClipboardWriter getWriter(OutputStream outputStream) throws IOException {
             outputStream = new BufferedOutputStream(outputStream);
             OutputStream gzip = new ParallelGZIPOutputStream(outputStream);
-            NBTOutputStream nbtStream = new NBTOutputStream(new BufferedOutputStream(gzip));
-            return new MinecraftStructure(nbtStream);
+            return new MinecraftStructure(new DataOutputStream(new BufferedOutputStream(gzip)));
         }
 
         @Override
@@ -365,6 +440,11 @@ public enum BuiltInClipboardFormat implements ClipboardFormat {
         public boolean isFormat(final File file) {
             return file.getName().toLowerCase(Locale.ROOT).endsWith(".nbt") && super.isFormat(file);
         }
+
+        @Override
+        public Set<String> getExplicitFileExtensions() {
+            return Set.of("nbt");
+        }
     },
 
     /**
@@ -390,6 +470,11 @@ public enum BuiltInClipboardFormat implements ClipboardFormat {
         @Override
         public String getPrimaryFileExtension() {
             return "png";
+        }
+
+        @Override
+        public Set<String> getExplicitFileExtensions() {
+            return Set.of("png");
         }
     };
     //FAWE end
@@ -440,6 +525,8 @@ public enum BuiltInClipboardFormat implements ClipboardFormat {
     @Deprecated
     public static final BuiltInClipboardFormat FAST = FAST_V2;
     //FAWE end
+
+    private static final LinReadOptions LEGACY_OPTIONS = LinReadOptions.builder().allowNormalUtf8Encoding(true).build();
 
     private final ImmutableSet<String> aliases;
 

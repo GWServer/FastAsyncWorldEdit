@@ -47,6 +47,7 @@ import com.sk89q.worldedit.function.block.BlockReplace;
 import com.sk89q.worldedit.function.mask.BlockMask;
 import com.sk89q.worldedit.function.mask.ExistingBlockMask;
 import com.sk89q.worldedit.function.mask.Mask;
+import com.sk89q.worldedit.function.mask.SolidBlockMask;
 import com.sk89q.worldedit.function.operation.Operation;
 import com.sk89q.worldedit.function.operation.Operations;
 import com.sk89q.worldedit.function.pattern.BlockPattern;
@@ -216,7 +217,7 @@ public interface Extent extends InputExtent, OutputExtent {
      */
 
     /**
-     * Returns the highest solid 'terrain' block.
+     * Returns the highest solid 'terrain' (movement-blocking) block.
      *
      * @param x    the X coordinate
      * @param z    the Z coordinate
@@ -225,6 +226,9 @@ public interface Extent extends InputExtent, OutputExtent {
      * @return height of highest block found or 'minY'
      */
     default int getHighestTerrainBlock(final int x, final int z, int minY, int maxY) {
+        maxY = Math.min(maxY, getMaxY());
+        minY = Math.max(getMinY(), minY);
+
         for (int y = maxY; y >= minY; --y) {
             BlockState block = getBlock(x, y, z);
             if (block.getBlockType().getMaterial().isMovementBlocker()) {
@@ -235,7 +239,7 @@ public interface Extent extends InputExtent, OutputExtent {
     }
 
     /**
-     * Returns the highest solid 'terrain' block.
+     * Returns the highest block matching the given mask.
      *
      * @param x      the X coordinate
      * @param z      the Z coordinate
@@ -245,6 +249,9 @@ public interface Extent extends InputExtent, OutputExtent {
      * @return height of highest block found or 'minY'
      */
     default int getHighestTerrainBlock(final int x, final int z, int minY, int maxY, Mask filter) {
+        if (filter == null) {
+            return getHighestTerrainBlock(x, z, minY, maxY);
+        }
         maxY = Math.min(maxY, getMaxY());
         minY = Math.max(getMinY(), minY);
 
@@ -259,9 +266,7 @@ public interface Extent extends InputExtent, OutputExtent {
     }
 
     /**
-     * Returns the nearest surface layer (up/down from start)
-     * <p>
-     * TODO: Someone understand this..?
+     * Returns the nearest surface layer (up/down from start), where a layer is 1/16th of a block to allow for snow, liquid, etc.
      *
      * @param x    x to search from
      * @param z    y to search from
@@ -271,6 +276,9 @@ public interface Extent extends InputExtent, OutputExtent {
      * @return nearest surface layer
      */
     default int getNearestSurfaceLayer(int x, int z, int y, int minY, int maxY) {
+        maxY = Math.min(maxY, getMaxY());
+        minY = Math.max(getMinY(), minY);
+
         int clearanceAbove = maxY - y;
         int clearanceBelow = y - minY;
         int clearance = Math.min(clearanceAbove, clearanceBelow);
@@ -331,6 +339,9 @@ public interface Extent extends InputExtent, OutputExtent {
      * @return The y value of the nearest terrain block
      */
     default int getNearestSurfaceTerrainBlock(int x, int z, int y, int minY, int maxY, int failedMin, int failedMax, Mask mask) {
+        maxY = Math.min(maxY, getMaxY());
+        minY = Math.max(getMinY(), minY);
+
         y = Math.max(minY, Math.min(maxY, y));
         int clearanceAbove = maxY - y;
         int clearanceBelow = y - minY;
@@ -438,22 +449,25 @@ public interface Extent extends InputExtent, OutputExtent {
             int failedMax,
             boolean ignoreAir
     ) {
+        maxY = Math.min(maxY, getMaxY());
+        minY = Math.max(getMinY(), minY);
+
         y = Math.max(minY, Math.min(maxY, y));
         int clearanceAbove = maxY - y;
         int clearanceBelow = y - minY;
         int clearance = Math.min(clearanceAbove, clearanceBelow);
         BlockState block = getBlock(x, y, z);
-        boolean state = !block.getBlockType().getMaterial().isMovementBlocker();
+        boolean state = !SolidBlockMask.isSolid(block);
         int offset = state ? 0 : 1;
         for (int d = 0; d <= clearance; d++) {
             int y1 = y + d;
             block = getBlock(x, y1, z);
-            if (block.getMaterial().isMovementBlocker() == state && block.getBlockType() != BlockTypes.__RESERVED__) {
+            if (matchesSolidState(block, state)) {
                 return y1 - offset;
             }
             int y2 = y - d;
             block = getBlock(x, y2, z);
-            if (block.getMaterial().isMovementBlocker() == state && block.getBlockType() != BlockTypes.__RESERVED__) {
+            if (matchesSolidState(block, state)) {
                 return y2 + offset;
             }
         }
@@ -461,14 +475,14 @@ public interface Extent extends InputExtent, OutputExtent {
             if (clearanceAbove < clearanceBelow) {
                 for (int layer = y - clearance - 1; layer >= minY; layer--) {
                     block = getBlock(x, layer, z);
-                    if (block.getMaterial().isMovementBlocker() == state && block.getBlockType() != BlockTypes.__RESERVED__) {
+                    if (matchesSolidState(block, state)) {
                         return layer + offset;
                     }
                 }
             } else {
                 for (int layer = y + clearance + 1; layer <= maxY; layer++) {
                     block = getBlock(x, layer, z);
-                    if (block.getMaterial().isMovementBlocker() == state && block.getBlockType() != BlockTypes.__RESERVED__) {
+                    if (matchesSolidState(block, state)) {
                         return layer - offset;
                     }
                 }
@@ -480,6 +494,10 @@ public interface Extent extends InputExtent, OutputExtent {
             return block.getBlockType().getMaterial().isAir() ? -1 : result;
         }
         return result;
+    }
+
+    private static boolean matchesSolidState(BlockState block, boolean state) {
+        return SolidBlockMask.isSolid(block) == state && block.getBlockType() != BlockTypes.__RESERVED__;
     }
 
     default void addCaves(Region region) throws WorldEditException {
@@ -494,7 +512,7 @@ public interface Extent extends InputExtent, OutputExtent {
 
     default void addSchems(Region region, Mask mask, List<ClipboardHolder> clipboards, int rarity, boolean rotate) throws
             WorldEditException {
-        spawnResource(region, new SchemGen(mask, this, clipboards, rotate), rarity, 1);
+        spawnResource(region, new SchemGen(mask, this, clipboards, rotate, region), rarity, 1);
     }
 
     default void spawnResource(Region region, Resource gen, int rarity, int frequency) throws WorldEditException {
@@ -679,7 +697,7 @@ public interface Extent extends InputExtent, OutputExtent {
      * @return
      */
     default Clipboard lazyCopy(Region region) {
-        WorldCopyClipboard faweClipboard = new WorldCopyClipboard(() -> this, region);
+        WorldCopyClipboard faweClipboard = WorldCopyClipboard.of(this, region);
         faweClipboard.setOrigin(region.getMinimumPoint());
         return faweClipboard;
     }
@@ -723,7 +741,6 @@ public interface Extent extends InputExtent, OutputExtent {
     default <B extends BlockStateHolder<B>> int setBlocks(Region region, B block) throws MaxChangedBlocksException {
         checkNotNull(region);
         checkNotNull(block);
-        boolean hasNbt = block instanceof BaseBlock && block.hasNbtData();
 
         int changes = 0;
         for (BlockVector3 pos : region) {
@@ -806,7 +823,7 @@ public interface Extent extends InputExtent, OutputExtent {
         checkNotNull(pattern);
 
         BlockReplace replace = new BlockReplace(this, pattern);
-        RegionMaskingFilter filter = new RegionMaskingFilter(this, mask, replace);
+        RegionMaskingFilter filter = new RegionMaskingFilter(mask, replace);
         //FAWE start > add extent to RegionVisitor to allow chunk preloading
         RegionVisitor visitor = new RegionVisitor(region, filter, this);
         //FAWE end
@@ -877,7 +894,7 @@ public interface Extent extends InputExtent, OutputExtent {
     }
 
     default Extent addPostProcessor(IBatchProcessor processor) {
-        if (processor.getScope() != ProcessorScope.READING_SET_BLOCKS) {
+        if (processor.getScope() != ProcessorScope.READING_BLOCKS) {
             throw new IllegalArgumentException("You cannot alter blocks in a PostProcessor");
         }
         return processor.construct(this);

@@ -12,8 +12,10 @@ import java.util.AbstractCollection;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * The BlockVectorSet is a memory optimized Set for storing {@link BlockVector3}'s.
@@ -26,6 +28,26 @@ import java.util.Objects;
 public class BlockVectorSet extends AbstractCollection<BlockVector3> implements BlockVector3Set {
 
     private final Long2ObjectLinkedOpenHashMap<LocalBlockVectorSet> localSets = new Long2ObjectLinkedOpenHashMap<>(4);
+
+    public BlockVectorSet() {
+    }
+
+    public BlockVectorSet(LocalBlockVectorSet localSet) {
+        if (localSet != null && localSet.isInitialised()) {
+            int offsetX = localSet.offsetX();
+            int offsetY = localSet.offsetY();
+            int offsetZ = localSet.offsetZ();
+            if ((offsetX & 2047) == 0 && (offsetY & 511) == 0 && (offsetZ & 2047) == 0) { // Can plug and play
+                localSets.put(MathMan.tripleWorldCoord(offsetX >> 11, offsetY >> 9, offsetZ >> 11), localSet);
+            } else {
+                localSet.forEach((x, y, z, index) -> this.add(x, y, z));
+            }
+        }
+    }
+
+    private BlockVectorSet(Map<Long, ? extends LocalBlockVectorSet> sets) {
+        localSets.putAll(sets);
+    }
 
     @Override
     public int size() {
@@ -192,12 +214,13 @@ public class BlockVectorSet extends AbstractCollection<BlockVector3> implements 
     }
 
     public boolean remove(int x, int y, int z) {
-        int pair = MathMan.pair((short) (x >> 11), (short) (z >> 11));
-        LocalBlockVectorSet localMap = localSets.get(pair);
+        int indexedY = (y + 128) >> 9;
+        long triple = MathMan.tripleWorldCoord((x >> 11), indexedY, (z >> 11));
+        LocalBlockVectorSet localMap = localSets.get(triple);
         if (localMap != null) {
-            if (localMap.remove(x & 2047, y, z & 2047)) {
+            if (localMap.remove(x & 2047, ((y + 128) & 511) - 128, z & 2047)) {
                 if (localMap.isEmpty()) {
-                    localSets.remove(pair);
+                    localSets.remove(triple);
                 }
                 return true;
             }
@@ -256,10 +279,17 @@ public class BlockVectorSet extends AbstractCollection<BlockVector3> implements 
         return result;
     }
 
-
     @Override
     public void clear() {
         localSets.clear();
+    }
+
+    @Override
+    public BlockVectorSet copy() {
+        return new BlockVectorSet(localSets
+                .long2ObjectEntrySet()
+                .stream()
+                .collect(Collectors.toMap(Long2ObjectMap.Entry::getLongKey, e -> e.getValue().copy())));
     }
 
 }

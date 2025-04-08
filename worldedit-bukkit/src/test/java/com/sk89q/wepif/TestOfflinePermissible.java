@@ -20,6 +20,7 @@
 package com.sk89q.wepif;
 
 import com.destroystokyo.paper.profile.PlayerProfile;
+import io.papermc.paper.persistence.PersistentDataContainerView;
 import org.bukkit.BanEntry;
 import org.bukkit.Location;
 import org.bukkit.Material;

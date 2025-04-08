@@ -69,18 +69,18 @@ import org.enginehub.piston.exception.StopExecutionException;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.Closeable;
+import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.nio.channels.Channels;
-import java.nio.channels.ReadableByteChannel;
 import java.io.OutputStream;
+import java.net.URI;
+import java.net.URL;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -91,8 +91,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-import java.util.function.Consumer;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
@@ -326,13 +326,13 @@ public class SchematicCommands {
 
         //FAWE start
         ClipboardFormat format;
-        InputStream in = null;
+        InputStream in;
         // if format is set explicitly, do not look up by extension!
         boolean noExplicitFormat = formatName == null;
         if (noExplicitFormat) {
             formatName = "fast";
         }
-        try {
+        try(final Closer closer = Closer.create()) {
             URI uri;
             if (formatName.startsWith("url:")) {
                 String t = filename;
@@ -346,17 +346,37 @@ public class SchematicCommands {
                 }
                 UUID uuid = UUID.fromString(filename.substring(4));
                 URL webUrl = new URL(Settings.settings().WEB.URL);
-                format = ClipboardFormats.findByAlias(formatName);
+                if ((format = ClipboardFormats.findByAlias(formatName)) == null) {
+                    actor.print(Caption.of("worldedit.schematic.unknown-format", TextComponent.of(formatName)));
+                    return;
+                }
+                // The interface requires the correct schematic extension - otherwise it can't be downloaded
+                // So it basically only supports .schem files (sponge v2 + v3) - or the correct extensions is specified manually
+                // Sadly it's not really an API endpoint but spits out the HTML source of the uploader - so no real handling
+                // can happen
                 URL url = new URL(webUrl, "uploads/" + uuid + "." + format.getPrimaryFileExtension());
-                ReadableByteChannel byteChannel = Channels.newChannel(url.openStream());
-                in = Channels.newInputStream(byteChannel);
-                uri = url.toURI();
+                final Path temp = Files.createTempFile("faweremoteschem", null);
+                final File tempFile = temp.toFile();
+                // delete temporary file when we're done
+                closer.register((Closeable) () -> Files.deleteIfExists(temp));
+                // write schematic into temporary file
+                try (final InputStream urlIn = new BufferedInputStream(url.openStream());
+                    final OutputStream tempOut = new BufferedOutputStream(new FileOutputStream(tempFile))) {
+                    urlIn.transferTo(tempOut);
+                }
+                // No format is specified -> try or fail
+                if (noExplicitFormat && (format = ClipboardFormats.findByFile(tempFile)) == null) {
+                    actor.print(Caption.of("fawe.worldedit.schematic.schematic.load-failure", TextComponent.of(filename)));
+                    return;
+                }
+                in = new FileInputStream(tempFile);
+                uri = temp.toUri();
             } else {
                 File saveDir = worldEdit.getWorkingDirectoryPath(config.saveDir).toFile();
                 File dir = Settings.settings().PATHS.PER_PLAYER_SCHEMATICS ? new File(saveDir, actor.getUniqueId().toString()) : saveDir;
                 File file;
                 if (filename.startsWith("#")) {
-                    format = ClipboardFormats.findByAlias(formatName);
+                    format = noExplicitFormat ? null : ClipboardFormats.findByAlias(formatName);
                     String[] extensions;
                     if (format != null) {
                         extensions = format.getFileExtensions().toArray(new String[0]);
@@ -376,11 +396,13 @@ public class SchematicCommands {
                         actor.print(Caption.of("fawe.error.no-perm", "worldedit.schematic.load.other"));
                         return;
                     }
-                    if (noExplicitFormat && filename.matches(".*\\.[\\w].*")) {
-                        format = ClipboardFormats
-                                .findByExtension(filename.substring(filename.lastIndexOf('.') + 1));
-                    } else {
+                    if (!noExplicitFormat) {
                         format = ClipboardFormats.findByAlias(formatName);
+                    } else if (filename.matches(".*\\.\\w.*")) {
+                        format = ClipboardFormats
+                                .findByExplicitExtension(filename.substring(filename.lastIndexOf('.') + 1));
+                    } else {
+                        format = null;
                     }
                     file = MainUtil.resolve(dir, filename, format, false);
                 }
@@ -399,13 +421,18 @@ public class SchematicCommands {
                 if (format == null) {
                     format = ClipboardFormats.findByFile(file);
                     if (format == null) {
-                        actor.print(Caption.of("worldedit.schematic.unknown-format", TextComponent.of(formatName)));
+                        if (noExplicitFormat) {
+                            actor.print(Caption.of("fawe.worldedit.schematic.schematic.load-failure", TextComponent.of(file.getName())));
+                        } else {
+                            actor.print(Caption.of("worldedit.schematic.unknown-format", TextComponent.of(formatName)));
+                        }
                         return;
                     }
                 }
                 in = new FileInputStream(file);
                 uri = file.toURI();
             }
+            closer.register(in);
             format.hold(actor, uri, in);
             if (randomRotate) {
                 AffineTransform transform = new AffineTransform();
@@ -416,16 +443,18 @@ public class SchematicCommands {
             actor.print(Caption.of("fawe.worldedit.schematic.schematic.loaded", filename));
         } catch (IllegalArgumentException e) {
             actor.print(Caption.of("worldedit.schematic.unknown-filename", TextComponent.of(filename)));
-        } catch (URISyntaxException | IOException e) {
+        } catch (EOFException e) {
+            // EOFException is extending IOException - but the IOException error is too generic.
+            // EOF mostly occurs when there was unexpected content in the schematic - due to the wrong reader (= version)
+            actor.print(Caption.of("fawe.worldedit.schematic.schematic.load-failure",
+                    TextComponent.of(e.getMessage() != null ? e.getMessage() : "EOFException"))); // often null...
+            LOGGER.error("Error loading a schematic", e);
+        } catch (IOException e) {
             actor.print(Caption.of("worldedit.schematic.file-not-exist", TextComponent.of(Objects.toString(e.getMessage()))));
             LOGGER.warn("Failed to load a saved clipboard", e);
-        } finally {
-            if (in != null) {
-                try {
-                    in.close();
-                } catch (IOException ignored) {
-                }
-            }
+        } catch (Exception e) {
+            actor.print(Caption.of("fawe.worldedit.schematic.schematic.load-failure", TextComponent.of(e.getMessage())));
+            LOGGER.error("Error loading a schematic", e);
         }
         //FAWE end
     }
@@ -975,12 +1004,7 @@ public class SchematicCommands {
                     uri = ((URIClipboardHolder) holder).getURI(clipboard);
                 }
                 if (new ActorSaveClipboardEvent(actor, clipboard, uri, file.toURI()).call()) {
-                    if (writer instanceof MinecraftStructure) {
-                        ((MinecraftStructure) writer).write(target, actor.getName());
-                    } else {
-                        writer.write(target);
-                    }
-
+                    writer.write(target);
                     closer.close(); // release the new .schem file so that its size can be measured
                     double filesizeKb = Files.size(Paths.get(file.getAbsolutePath())) / 1000.0;
 

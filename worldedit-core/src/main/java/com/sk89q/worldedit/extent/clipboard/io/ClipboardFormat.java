@@ -101,7 +101,7 @@ public interface ClipboardFormat {
      *
      * @param inputStream The stream
      * @return true if the given stream is of this format
-     * @since TODO
+     * @since 2.11.1
      */
     default boolean isFormat(InputStream inputStream) {
         return false;
@@ -123,6 +123,13 @@ public interface ClipboardFormat {
     Set<String> getFileExtensions();
 
     //FAWE start
+
+    /**
+     * Get the explicit file extensions (e.g. .schem2) this format is commonly known to use.
+     *
+     * @return The explicit file extensions this format might be known by
+     */
+    Set<String> getExplicitFileExtensions();
 
     /**
      * Sets the actor's clipboard.
